@@ -25,97 +25,124 @@ namespace KioskDevice.Services.Advanced
         public string LastError { get; set; }
     }
 
-    public class HealthCheckService : IHealthCheckService
+   public class HealthCheckService : IHealthCheckService
+{
+    private readonly IPrinterService _printerService;
+    private readonly IDisplayService _displayService;
+    private readonly ICallSystemService _callSystemService;
+    private readonly IBackendCommunicationService _backendService;
+    private readonly ILogger<HealthCheckService> _logger;
+
+    public HealthCheckService(
+        IPrinterService printerService,
+        IDisplayService displayService,
+        ICallSystemService callSystemService,
+        IBackendCommunicationService backendService,
+        ILogger<HealthCheckService> logger)
     {
-        private readonly IPrinterService _printerService;
-        private readonly IDisplayService _displayService;
-        private readonly ICallSystemService _callSystemService;
-        private readonly IBackendCommunicationService _backendService;
-        private readonly ILogger<HealthCheckService> _logger;
+        _printerService = printerService;
+        _displayService = displayService;
+        _callSystemService = callSystemService;
+        _backendService = backendService;
+        _logger = logger;
+    }
 
-        public HealthCheckService(
-            IPrinterService printerService,
-            IDisplayService displayService,
-            ICallSystemService callSystemService,
-            IBackendCommunicationService backendService,
-            ILogger<HealthCheckService> logger)
+    public async Task<HealthCheckResult> PerformHealthCheckAsync()
+    {
+        var result = new HealthCheckResult
         {
-            _printerService = printerService;
-            _displayService = displayService;
-            _callSystemService = callSystemService;
-            _backendService = backendService;
-            _logger = logger;
-        }
+            Components = new Dictionary<string, ComponentHealth>(),
+            CheckedAt = DateTime.UtcNow
+        };
 
-        public async Task<HealthCheckResult> PerformHealthCheckAsync()
+        try
         {
-            var result = new HealthCheckResult
+            // Kiểm tra Printer
+            var printerReady = await _printerService.IsPrinterReadyAsync();
+            var printerStatus = await _printerService.GetPrinterStatusAsync();
+
+            result.Components["Printer"] = new ComponentHealth
             {
-                Components = new Dictionary<string, ComponentHealth>(),
-                CheckedAt = DateTime.UtcNow
+                Name = "Printer",
+                IsHealthy = printerReady,
+                Status = printerStatus
             };
 
-            try
+            // Kiểm tra Call System
+            var callStatus = await _callSystemService.GetCallSystemStatusAsync();
+            result.Components["CallSystem"] = new ComponentHealth
             {
-                // Kiểm tra Printer
-                var printerReady = await _printerService.IsPrinterReadyAsync();
-                result.Components["Printer"] = new ComponentHealth
+                Name = "Call System",
+                IsHealthy = callStatus == 1,
+                Status = callStatus == 1 ? "Running" : "Error"
+            };
+
+            // Kiểm tra Display
+            result.Components["Display"] = new ComponentHealth
+            {
+                Name = "Display",
+                IsHealthy = true,
+                Status = "OK"
+            };
+
+            // Chuẩn bị HeartbeatData mới
+            var heartbeat = new HeartbeatData
+            {
+                Speaker = new DeviceInfo
+                {
+                    Name = "Speaker",
+                    Id = "SPEAKER_01",
+                    Type = "Audio",
+                    Status = "Online",
+                    Volume = 80,
+                    IsPlaying = false
+                },
+                Printer = new DeviceInfo
                 {
                     Name = "Printer",
-                    IsHealthy = printerReady,
-                    Status = await _printerService.GetPrinterStatusAsync()
-                };
-
-                // Kiểm tra Call System
-                var callStatus = await _callSystemService.GetCallSystemStatusAsync();
-                result.Components["CallSystem"] = new ComponentHealth
-                {
-                    Name = "Call System",
-                    IsHealthy = callStatus == 1,
-                    Status = callStatus == 1 ? "Running" : "Error"
-                };
-
-                // Kiểm tra Display
-                result.Components["Display"] = new ComponentHealth
-                {
-                    Name = "Display",
-                    IsHealthy = true,
-                    Status = "OK"
-                };
-
-                // Kiểm tra Backend
-                try
-                {
-                    var heartbeat = new DeviceStatusDto { DeviceId = "KIOSK-001", Status = "ONLINE" };
-                    var backendOk = await _backendService.SendHeartbeatAsync(heartbeat);
-                    result.Components["Backend"] = new ComponentHealth
-                    {
-                        Name = "Backend",
-                        IsHealthy = backendOk,
-                        Status = backendOk ? "Connected" : "Disconnected"
-                    };
+                    Id = "PRINTER_01",
+                    Type = "Thermal",
+                    Status = printerReady ? "Online" : "Offline",
+                    Paper = printerStatus,
+                    IsPrinting = false
                 }
-                catch (Exception ex)
-                {
-                    result.Components["Backend"] = new ComponentHealth
-                    {
-                        Name = "Backend",
-                        IsHealthy = false,
-                        Status = "Error",
-                        LastError = ex.Message
-                    };
-                }
+            };
 
-                result.IsHealthy = result.Components.Values.All(c => c.IsHealthy);
-                _logger.LogInformation($"Health check completed. Overall health: {(result.IsHealthy ? "HEALTHY" : "UNHEALTHY")}");
+            // Gửi heartbeat tới backend
+            try
+            {
+                var response = await _backendService.SendHeartbeatAsync(heartbeat);
+                var backendOk = response.Status;
+                result.Components["Backend"] = new ComponentHealth
+                {
+                    Name = "Backend",
+                    IsHealthy = backendOk,
+                    Status = backendOk ? "Connected" : "Disconnected"
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Health check failed: {ex.Message}");
-                result.IsHealthy = false;
+                result.Components["Backend"] = new ComponentHealth
+                {
+                    Name = "Backend",
+                    IsHealthy = false,
+                    Status = "Error",
+                    LastError = ex.Message
+                };
             }
 
-            return result;
+            // Tổng hợp kết quả
+            result.IsHealthy = result.Components.Values.All(c => c.IsHealthy);
+            _logger.LogInformation($"Health check completed. Overall health: {(result.IsHealthy ? "HEALTHY" : "UNHEALTHY")}");
         }
+        catch (Exception ex)
+        {
+            _logger.LogError($"Health check failed: {ex.Message}");
+            result.IsHealthy = false;
+        }
+
+        return result;
     }
+}
+
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
@@ -17,7 +18,10 @@ namespace KioskDevice.Services.Implementations
         private readonly string _backendUrl;
         private readonly string _deviceId;
 
-        public BackendCommunicationService(ILogger<BackendCommunicationService> logger, IHttpClientFactory httpFactory, IConfiguration config)
+        public BackendCommunicationService(
+            ILogger<BackendCommunicationService> logger,
+            IHttpClientFactory httpFactory,
+            IConfiguration config)
         {
             _logger = logger;
             _httpClient = httpFactory.CreateClient("BackendApi");
@@ -25,17 +29,20 @@ namespace KioskDevice.Services.Implementations
             _deviceId = config.GetValue<string>("Device:DeviceId", "KIOSK-001");
         }
 
-        public async Task<DeviceCommandResponse> GetPendingCommandsAsync()
+        public async Task<ApiResponse<CommandData>> GetPendingCommandsAsync()
         {
             try
             {
-                var response = await _httpClient.GetAsync($"{_backendUrl}/api/device/commands/{_deviceId}");
-                
+                var response = await _httpClient.GetAsync(
+                    $"{_backendUrl}/api/v1/kiosks/commands/{_deviceId}");
+
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
-                    return JsonConvert.DeserializeObject<DeviceCommandResponse>(json);
+                    return JsonConvert.DeserializeObject<ApiResponse<CommandData>>(json);
                 }
+
+                _logger.LogWarning($"Failed to get commands: {response.StatusCode}");
                 return null;
             }
             catch (Exception ex)
@@ -45,46 +52,118 @@ namespace KioskDevice.Services.Implementations
             }
         }
 
-        public async Task<bool> SendHeartbeatAsync(DeviceStatusDto status)
+        public async Task<ApiResponse<object>> SendHeartbeatAsync(HeartbeatData heartbeatData)
         {
             try
             {
-                var json = JsonConvert.SerializeObject(status);
+                var request = new HeartbeatRequest
+                {
+                    CommandId = Guid.NewGuid().ToString(),
+                    DeviceId = _deviceId,
+                    Timestamp = DateTime.UtcNow,
+                    Version = "1.0.0",
+                    Message = "Thông tin heartbeat",
+                    Type = "HEARTBEAT",
+                    Data = heartbeatData
+                };
+
+                var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"{_backendUrl}/api/device/heartbeat", content);
-                return response.IsSuccessStatusCode;
+
+                var response = await _httpClient.PostAsync(
+                    $"{_backendUrl}/api/v1/kiosks/heartbeat",
+                    content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<ApiResponse<object>>(responseJson);
+                }
+
+                _logger.LogWarning($"Heartbeat failed: {response.StatusCode}");
+                return null;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Heartbeat error: {ex.Message}");
-                return false;
+                return null;
             }
         }
 
-        public async Task<bool> ReportErrorAsync(string errorMessage, string errorType)
+        public async Task<ApiResponse<object>> SendCommandResultAsync(string commandId, bool success, string message = "")
         {
             try
             {
-                var errorData = new { DeviceId = _deviceId, Message = errorMessage, Type = errorType, Timestamp = DateTime.UtcNow };
-                var json = JsonConvert.SerializeObject(errorData);
+                var request = new CommandResultRequest
+                {
+                    CommandId = commandId,
+                    DeviceId = _deviceId,
+                    Timestamp = DateTime.UtcNow,
+                    Version = "1.0.0",
+                    Message = message,
+                    Type = "RESULT",
+                    Data = new { status = success }
+                };
+
+                var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"{_backendUrl}/api/device/errors", content);
-                return response.IsSuccessStatusCode;
+
+                var response = await _httpClient.PostAsync(
+                    $"{_backendUrl}/api/v1/kiosks/commands/result",
+                    content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<ApiResponse<object>>(responseJson);
+                }
+
+                _logger.LogWarning($"Command result failed: {response.StatusCode}");
+                return null;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Send command result error: {ex.Message}");
+                return null;
+            }
         }
 
-        public async Task<bool> AcknowledgeCommandAsync(string commandId)
+        public async Task<ApiResponse<object>> ReportErrorAsync(string commandId, string errorType, string message)
         {
             try
             {
-                var ackData = new { DeviceId = _deviceId, CommandId = commandId, Status = "COMPLETED" };
-                var json = JsonConvert.SerializeObject(ackData);
+                var request = new ErrorReportRequest
+                {
+                    CommandId = commandId,
+                    DeviceId = _deviceId,
+                    Timestamp = DateTime.UtcNow,
+                    Version = "1.0.0",
+                    Message = message,
+                    Type = errorType,
+                    Data = new { }
+                };
+
+                var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync($"{_backendUrl}/api/device/commands/acknowledge", content);
-                return response.IsSuccessStatusCode;
+
+                var response = await _httpClient.PostAsync(
+                    $"{_backendUrl}/api/v1/kiosks/errors",
+                    content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    return JsonConvert.DeserializeObject<ApiResponse<object>>(responseJson);
+                }
+
+                _logger.LogWarning($"Error report failed: {response.StatusCode}");
+                return null;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Report error error: {ex.Message}");
+                return null;
+            }
         }
     }
 }

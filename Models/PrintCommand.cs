@@ -1,4 +1,5 @@
 using System;
+
 namespace KioskDevice.Models
 {
     public class PrintCommand
@@ -7,5 +8,6 @@ namespace KioskDevice.Models
         public string DepartmentName { get; set; }
         public int QueuePosition { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string FilePath { get; set; }
     }
 }

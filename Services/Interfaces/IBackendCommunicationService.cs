@@ -5,9 +5,9 @@ namespace KioskDevice.Services.Interfaces
 {
     public interface IBackendCommunicationService
     {
-        Task<DeviceCommandResponse> GetPendingCommandsAsync();
-        Task<bool> SendHeartbeatAsync(DeviceStatusDto status);
-        Task<bool> ReportErrorAsync(string errorMessage, string errorType);
-        Task<bool> AcknowledgeCommandAsync(string commandId);
+        Task<ApiResponse<CommandData>> GetPendingCommandsAsync();
+        Task<ApiResponse<object>> SendHeartbeatAsync(HeartbeatData heartbeatData);
+        Task<ApiResponse<object>> SendCommandResultAsync(string commandId, bool success, string message = "");
+        Task<ApiResponse<object>> ReportErrorAsync(string commandId, string errorType, string message);
     }
 }

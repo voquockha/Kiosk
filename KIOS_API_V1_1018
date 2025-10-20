@@ -1,0 +1,175 @@
+Device url: http://10.82.117.235:5001 (Device Port: 5001)
+BE url: http://10.82.117.235:5000 (BE Port: 5000)
+
+// ============================================
+ Device -> Backend
+// ============================================
+
+/*
+=== 1. GET PENDING COMMANDS ===
+Endpoint: GET /api/v1/kiosks/commands/{deviceId}
+Response:
+{
+  "commandId": "CMD-20250301-001",
+  "type": "PRINT",
+  "data": {
+    "ticketNumber": "A001",
+    "departmentName": "Quầy đất đai",
+    "queuePosition": 5,
+    "createdAt": "2025-03-01T10:30:00Z",
+    "path": "D:\file\print_a001.pdf"
+  },
+  "timestamp": "2025-03-01T10:30:05Z"
+}
+
+=== 2. SEND HEARTBEAT ===
+Endpoint: POST /api/v1/kiosks/heartbeat
+Request Body:
+{
+  "deviceId": "KIOSK-001",
+  "version": "1.0.0",
+  "status": "ONLINE",
+  "devices": {
+    "speaker": {
+      "name": "Default Audio Device",
+      "id": "speaker-1",
+      "type": "speaker",
+      "status": "ok",
+      "volume": 80,
+      "isPlaying": false
+    },
+    "printer": {
+      "name": "HP printer",
+      "id": "printer-1",
+      "type": "thermal_printer",
+      "status": "error",
+      "paper": "error",
+      "temp": "critical",
+      "isPrinting": false
+    }
+  }
+  "lastHeartbeat": "2025-03-01T10:35:00Z"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Heartbeat received"
+}
+
+=== 3. STATUS COMMAND ===
+Endpoint: POST /api/v1/kiosks/commands/status
+Request Body:
+{
+  "deviceId": "KIOSK-001",
+  "commandId": "CMD-20250301-001",
+  "status": "COMPLETED"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Command processed"
+}
+
+=== 4. REPORT ERROR ===
+Endpoint: POST /api/v1/kiosks/errors
+Request Body:
+{
+  "deviceId": "KIOSK-001",
+  "message": "Printer paper out",
+  "type": "PRINTER_ERROR",
+  "timestamp": "2025-03-01T10:40:00Z"
+}
+
+Response:
+{
+  "success": true,
+  "errorId": "ERR-20250301-001"
+}
+
+
+// ============================================
+Backend -> Device  
+// ============================================
+
+=== 5. LOCAL ENDPOINT: Print Ticket ===
+Endpoint: POST /api/device/print
+Request Body:
+{
+  "ticketNumber": "A001",
+  "departmentName": "Quầy đất đai",
+  "queuePosition": 5,
+  "createdAt": "2025-03-01T10:30:00Z",
+  "path": "D:\file\print_a001.pdf"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Print command processed",
+  "ticketNumber": "A001"
+}
+
+=== 6. LOCAL ENDPOINT: Call Ticket ===
+Endpoint: POST /api/device/call
+Request Body:
+{
+  "ticketNumber": "A001",
+  "departmentName": "Quầy đất đai",
+  "counterNumber": 3,
+  "status": "CALLING"
+}
+
+Response:
+{
+  "success": true,
+  "message": "Call command processed"
+}
+
+=== 7. LOCAL ENDPOINT: Device Status ===
+Endpoint: GET /api/device/status
+Response:
+{
+  "deviceId": "KIOSK-001",
+  "status": "ONLINE",
+  "printerStatus": "Ready",
+  "displayStatus": "OK",
+  "callSystemStatus": 1,
+  "lastHeartbeat": "2025-03-01T10:35:00Z"
+}
+
+// ============================================
+// COMMAND TYPES FROM BACKEND
+// ============================================
+
+{
+  "PRINT": {
+    "description": "In phiếu số thứ tự",
+    "fields": ["ticketNumber", "departmentName", "queuePosition", "createdAt"]
+  },
+  "CALL": {
+    "description": "Gọi số thứ tự",
+    "fields": ["ticketNumber", "departmentName", "counterNumber", "status"]
+  },
+  "DISPLAY_MSG": {
+    "description": "Hiển thị thông báo trên màn hình",
+    "fields": ["message", "duration"]
+  },
+  "RESET": {
+    "description": "Reset hệ thống device",
+    "fields": []
+  }
+}
+
+// ============================================
+// ERROR TYPES
+// ============================================
+
+{
+  "PRINTER_ERROR": "Lỗi máy in - Hết giấy, lỗi kết nối, etc",
+  "DISPLAY_ERROR": "Lỗi màn hình hiển thị",
+  "CALL_SYSTEM_ERROR": "Lỗi hệ thống gọi - Loa, micro, kết nối",
+  "COMMUNICATION_ERROR": "Lỗi kết nối với BE",
+  "HARDWARE_ERROR": "Lỗi phần cứng khác"
+}
