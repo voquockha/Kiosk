@@ -188,20 +188,20 @@ namespace KioskDevice.Controllers
             try
             {
                 // Kiểm tra device sẵn sàng
-                var canProcess = await _stateManager.CanProcessCommandAsync("CALL");
-                if (!canProcess)
-                {
-                    _logger.LogWarning($"Device not ready to call. Current state: {_stateManager.GetCurrentState()}");
-                    return StatusCode(503, new CallResponse
-                    {
-                        CommandId = request.CommandId,
-                        DeviceId = request.DeviceId,
-                        Status = false,
-                        Message = "Device not ready for calling",
-                        Type = "CALL",
-                        Timestamp = DateTime.UtcNow
-                    });
-                }
+                // var canProcess = await _stateManager.CanProcessCommandAsync("CALL");
+                // if (!canProcess)
+                // {
+                //     _logger.LogWarning($"Device not ready to call. Current state: {_stateManager.GetCurrentState()}");
+                //     return StatusCode(503, new CallResponse
+                //     {
+                //         CommandId = request.CommandId,
+                //         DeviceId = request.DeviceId,
+                //         Status = false,
+                //         Message = "Device not ready for calling",
+                //         Type = "CALL",
+                //         Timestamp = DateTime.UtcNow
+                //     });
+                // }
 
                 // Khóa device - từ chối lệnh mới
                 await _stateManager.ChangeStateAsync(DeviceState.Calling, "Processing call command");
