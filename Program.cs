@@ -53,7 +53,7 @@ var app = builder.Build();
 
 // ========== CONFIGURE URL ==========
 app.Urls.Clear();
-app.Urls.Add("http://localhost:5001");
+app.Urls.Add("http://0.0.0.0:5001");
 
 Console.WriteLine("=== Cấu hình Services ===");
 
@@ -73,7 +73,7 @@ app.UseCors("AllowAll");
 // ========== MAP CONTROLLERS ==========
 app.MapControllers();
 
-Console.WriteLine("=== KioskDevice đang lắng nghe trên http://localhost:5001 ===");
+Console.WriteLine("=== KioskDevice aaaaa đang lắng nghe trên http://localhost:5001 ===");
 Console.WriteLine("=== Swagger UI: http://localhost:5001/swagger ===");
 
 // ========== RUN APP ==========
