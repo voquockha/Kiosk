@@ -219,8 +219,8 @@ namespace KioskDevice.Services
                                 },
                                 Printer = new DeviceInfo
                                 {
-                                    Name = "HP printer",
-                                    Id = "printer-1",
+                                    Name = "EPSON TM-T81III Receipt",
+                                    Id = "TM-T81III",
                                     Type = "thermal_printer",
                                     Status = status.PrinterStatus == "Ready" ? "ok" : "error",
                                     Paper = status.PrinterStatus == "Ready" ? "ok" : "error",
