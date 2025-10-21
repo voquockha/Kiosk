@@ -51,6 +51,8 @@ namespace KioskDevice.Services.Advanced
         {
             return _currentState switch
             {
+                DeviceState.Printing => false,
+                DeviceState.Initializing => true,
                 DeviceState.Ready => true,
                 DeviceState.Offline => false,
                 DeviceState.Error => commandType == "RESET",
