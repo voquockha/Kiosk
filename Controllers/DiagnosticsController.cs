@@ -75,7 +75,7 @@ namespace KioskDevice.Controllers
                     "display" => Ok(new
                     {
                         component = "Display",
-                        status = await _displayService.DisplayMessageAsync("TEST MESSAGE") ? "OK" : "FAILED",
+                        status = await _displayService.DisplayMessageAsync("TEST", "TEST") ? "OK" : "FAILED",
                         message = "Test message sent"
                     }),
 
