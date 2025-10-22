@@ -128,7 +128,7 @@ namespace KioskDevice.Services
                                 {
                                     TicketNumber = commandResponse.Data?.TicketNumber,
                                     DepartmentName = commandResponse.Data?.DepartmentName,
-                                    CounterNumber = commandResponse.Data?.CounterNumber ?? 0,
+                                    CounterNumber = commandResponse.Data?.CounterNumber,
                                     Status = "CALLING",
                                     AudioPath = commandResponse.Data?.Path
                                 };

@@ -47,30 +47,116 @@ namespace KioskDevice.Services.Implementations
                 return false;
             }
         }
+private List<string> ConvertNumberToAudioFiles(int number)
+{
+    var files = new List<string>();
+    if (number == 0)
+    {
+        files.Add("0.mp3");
+        return files;
+    }
+
+    if (number >= 1000)
+    {
+        int nghin = number / 1000;
+        files.Add($"{nghin}.mp3");
+        files.Add("ngàn.mp3");
+        number %= 1000;
+        if (number == 0) return files;
+        if (number < 10) files.Add("lẻ.mp3");
+    }
+
+    if (number >= 100)
+    {
+        int tram = number / 100;
+        files.Add($"{tram}.mp3");
+        files.Add("trăm.mp3");
+        number %= 100;
+
+        if (number == 0) return files;
+        if (number < 10) files.Add("lẻ.mp3");
+    }
+
+    if (number >= 10)
+    {
+        int chuc = number / 10;
+        int donvi = number % 10;
+
+        if (chuc == 1)
+        {
+            files.Add("mười.mp3");
+        }
+        else
+        {
+            files.Add($"{chuc}.mp3");
+            files.Add("mươi.mp3");
+        }
+
+        if (donvi == 0) return files;
+
+        if (donvi == 1 && chuc > 1)
+            files.Add("mốt.mp3");
+        else if (donvi == 5 && chuc > 0)
+            files.Add("lăm.mp3");
+        else
+            files.Add($"{donvi}.mp3");
+
+        return files;
+    }
+
+    // Trường hợp chỉ có 1 chữ số
+    if (number > 0)
+    {
+        files.Add($"{number}.mp3");
+    }
+
+    return files;
+}
 
         /// <summary>
         /// Phát câu "Xin mời quý khách số thứ tự X vào quầy Y số Z"
         /// bằng cách phát nhiều file .wav liên tiếp
         /// </summary>
-        private async Task<bool> PlayCallSentenceAsync(CallCommand command)
+       private async Task<bool> PlayCallSentenceAsync(CallCommand command)
         {
             try
             {
-                string basePath = @"D:\WorkSpaces\Kiosk\Audio";
+                string basePath = Path.Combine(AppContext.BaseDirectory, "audio");
 
+                // Bắt đầu phát theo thứ tự
                 var audioFiles = new List<string>
                 {
-                    "Vaoquaytiepnhanso.mp3",
-                    $"{command.CounterNumber}.mp3",
-                    $"{command.TicketNumber}.mp3",
+                    "xinmoiquykhachso.mp3"
                 };
 
+                // Convert số thứ tự thành danh sách file mp3
+                if (int.TryParse(command.TicketNumber, out int ticketNumber))
+                {
+                    audioFiles.AddRange(ConvertNumberToAudioFiles(ticketNumber));
+                }
+                else
+                {
+                    _logger.LogWarning($"Không thể parse số thứ tự: {command.TicketNumber}");
+                }
+
+                audioFiles.Add("Vaoquaytiepnhanso.mp3");
+                
+                if (int.TryParse(command.CounterNumber, out int counterNumber))
+                {
+                    audioFiles.AddRange(ConvertNumberToAudioFiles(counterNumber));
+                }
+                else
+                {
+                    _logger.LogWarning($"Không thể parse số quầy: {command.CounterNumber}");
+                }
+
+                // Phát từng file
                 foreach (var fileName in audioFiles)
                 {
                     var path = Path.Combine(basePath, fileName);
                     if (!File.Exists(path))
                     {
-                        _logger.LogWarning($"⚠️ File không tồn tại: {path}, bỏ qua...");
+                        _logger.LogWarning($"File không tồn tại: {path}, bỏ qua...");
                         continue;
                     }
 
