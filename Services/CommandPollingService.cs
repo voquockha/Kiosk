@@ -128,7 +128,7 @@ namespace KioskDevice.Services
                                 {
                                     TicketNumber = commandResponse.Data?.TicketNumber,
                                     DepartmentName = commandResponse.Data?.DepartmentName,
-                                    CounterNumber = commandResponse.Data?.CounterNumber ?? 0,
+                                    CounterNumber = commandResponse.Data?.CounterNumber,
                                     Status = "CALLING",
                                     AudioPath = commandResponse.Data?.Path
                                 };
@@ -219,8 +219,8 @@ namespace KioskDevice.Services
                                 },
                                 Printer = new DeviceInfo
                                 {
-                                    Name = "HP printer",
-                                    Id = "printer-1",
+                                    Name = "EPSON TM-T81III Receipt",
+                                    Id = "TM-T81III",
                                     Type = "thermal_printer",
                                     Status = status.PrinterStatus == "Ready" ? "ok" : "error",
                                     Paper = status.PrinterStatus == "Ready" ? "ok" : "error",

@@ -4,9 +4,13 @@ rm -rf output/
 
 mkdir -p output/
 
+
 dotnet clean
 # Build the release
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ./output/kiosk_device
+
+mkdir -p output/kiosk_device/audio/
+cp Audio/* output/kiosk_device/audio/
 
 # Zip the release
 zip -r ./output/kiosk_device.zip ./output/kiosk_device

@@ -21,11 +21,9 @@ namespace KioskDevice.Models
         public string TicketNumber { get; set; }
         public string DepartmentName { get; set; }
         public int QueuePosition { get; set; }
-        public int CounterNumber { get; set; }
+        public string CounterNumber { get; set; }
         public DateTime CreatedAt { get; set; }
         public string Path { get; set; }
-        public string QRCode { get; set; }
-        public string CustomerName { get; set; }
     }
 
     // Heartbeat request
