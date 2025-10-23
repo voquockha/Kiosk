@@ -107,8 +107,8 @@ namespace KioskDevice.Controllers
                 {
                     TicketNumber = $"TEST-{DateTime.UtcNow:HHmmss}",
                     DepartmentName = "Phòng Khám Test",
-                    QueuePosition = 1,
-                    CreatedAt = DateTime.UtcNow
+                    CounterNumber = "1",
+                    FilePath = ""
                 };
 
                 var result = await _printerService.PrintTicketAsync(testCommand);
