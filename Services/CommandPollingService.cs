@@ -63,9 +63,8 @@ namespace KioskDevice.Services
                                 {
                                     TicketNumber = commandResponse.Data?.TicketNumber,
                                     DepartmentName = commandResponse.Data?.DepartmentName,
-                                    QueuePosition = commandResponse.Data?.QueuePosition ?? 0,
-                                    CreatedAt = commandResponse.Data?.CreatedAt ?? DateTime.UtcNow,
-                                    FilePath = commandResponse.Data?.Path
+                                    CounterNumber = commandResponse.Data?.CounterNumber,
+                                    FilePath = commandResponse.Data?.Path,
                                 };
 
                                 // Kiểm tra state

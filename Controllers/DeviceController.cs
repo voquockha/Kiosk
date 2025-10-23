@@ -75,11 +75,10 @@ namespace KioskDevice.Controllers
                     // Tạo PrintCommand từ request data
                     var printCommand = new PrintCommand
                     {
-                        TicketNumber = request.Data.TicketNumber,
-                        DepartmentName = request.Data.DepartmentName,
-                        QueuePosition = request.Data.QueuePosition,
-                        CreatedAt = request.Data.CreatedAt,
-                        FilePath = request.Data.Path
+                        TicketNumber = request.Data?.TicketNumber,
+                        DepartmentName = request.Data?.DepartmentName,
+                        CounterNumber = request.Data?.CounterNumber,
+                        FilePath = request.Data?.Path,
                     };
 
                     // Xử lý in phiếu

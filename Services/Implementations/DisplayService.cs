@@ -26,11 +26,8 @@ namespace KioskDevice.Services.Implementations
         {
             try
             {
-                await SendToDisplayAsync("*[Matrix][SetFont]Font2[!]", counterNumber);
-
-                await SendToDisplayAsync("*[Matrix][SetAlign][H1]Center[!]", counterNumber);
-                await SendToDisplayAsync("*[Matrix][SetAlign][H2]Center[!]", counterNumber);
-                await SendToDisplayAsync($"*[H1]QUAY {counterNumber}[!]", counterNumber);
+                // await SendToDisplayAsync($"*[H1]QUAY {counterNumber}[!]", counterNumber);
+                // await Task.Delay(200); // delay nhẹ để LED xử lý
                 await SendToDisplayAsync($"*[H2]MOI SO {ticketNumber}[!]", counterNumber);
                 return true;
             }
@@ -41,7 +38,7 @@ namespace KioskDevice.Services.Implementations
             }
         }
 
-        private async Task<bool> SendToDisplayAsync(string message, string counterNumber)
+        public async Task<bool> SendToDisplayAsync(string message, string counterNumber)
         {
             try
             {
@@ -61,7 +58,7 @@ namespace KioskDevice.Services.Implementations
                 {
                     // Thử kết nối với timeout (2 giây)
                     var connectTask = client.ConnectAsync(host, port);
-                    var timeoutTask = Task.Delay(2000);
+                    var timeoutTask = Task.Delay(1000);
 
                     var completedTask = await Task.WhenAny(connectTask, timeoutTask);
                     if (completedTask == timeoutTask)
