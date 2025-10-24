@@ -18,6 +18,8 @@ namespace KioskDevice.Controllers
         private readonly IBackendCommunicationService _backendService;
         private readonly ILogger<DeviceController> _logger;
         private readonly IConfiguration _config;
+        private readonly IPrinterService _printerService;
+        private readonly ICallSystemService _callSystemService;
 
         public DeviceController(
             IDeviceOrchestrator orchestrator,
@@ -25,7 +27,9 @@ namespace KioskDevice.Controllers
             IEventLogger eventLogger,
             IBackendCommunicationService backendService,
             ILogger<DeviceController> logger,
-            IConfiguration config)
+            IConfiguration config,
+            IPrinterService printerService,
+            ICallSystemService callSystemService)
         {
             _orchestrator = orchestrator;
             _stateManager = stateManager;
@@ -33,6 +37,8 @@ namespace KioskDevice.Controllers
             _backendService = backendService;
             _logger = logger;
             _config = config;
+            _printerService = printerService;
+            _callSystemService = callSystemService;
         }
 
         /// <summary>
@@ -43,71 +49,89 @@ namespace KioskDevice.Controllers
         public async Task<IActionResult> PrintTicket([FromBody] ApiResponse<CommandData> request)
         {
             if (request?.Data == null)
-                return BadRequest(new PrintResponse
-                {
-                    Status = false,
-                    Message = "Invalid request data",
-                    Type = "PRINT"
-                });
+                return BadRequest(new PrintResponse { Status = false, Message = "Invalid data", Type = "PRINT" });
 
             try
             {
-                // Kiểm tra device sẵn sàng
+                // 1. Kiểm tra SPAM (đang xử lý lệnh PRINT khác)
                 var canProcess = await _stateManager.CanProcessCommandAsync("PRINT");
                 if (!canProcess)
                 {
-                    _logger.LogWarning($"Device not ready to print. Current state: {_stateManager.GetCurrentState()}");
-                    return StatusCode(503, new PrintResponse
+                    _logger.LogWarning($"Print rejected: Device is busy printing");
+                    return StatusCode(429, new PrintResponse // 429 Too Many Requests
                     {
                         CommandId = request.CommandId,
                         DeviceId = request.DeviceId,
                         Status = false,
-                        Message = "Device not ready for printing",
+                        Message = "Device đang xử lý lệnh in khác, vui lòng chờ",
                         Type = "PRINT",
                         Timestamp = DateTime.UtcNow
                     });
                 }
 
-                // Khóa device - từ chối lệnh mới
-                await _stateManager.ChangeStateAsync(DeviceState.Printing, "Processing print command");
+                // 2. Kiểm tra máy in SẴN SÀNG chưa (kiểm tra thực tế)
+                var printerReady = await _printerService.IsPrinterReadyAsync();
+                if (!printerReady)
+                {
+                    var printerStatus = await _printerService.GetPrinterStatusAsync();
+                    _logger.LogWarning($"Printer not ready: {printerStatus}");
+                    
+                    // Báo lỗi về Backend nhưng KHÔNG khóa state
+                    await _backendService.ReportErrorAsync(
+                        request.CommandId,
+                        "PRINTER_ERROR",
+                        $"Máy in không sẵn sàng: {printerStatus}"
+                    );
+
+                    return StatusCode(503, new PrintResponse
+                    {
+                        CommandId = request.CommandId,
+                        DeviceId = request.DeviceId,
+                        Status = false,
+                        Message = $"Máy in không sẵn sàng: {printerStatus}",
+                        Type = "PRINT",
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
+
+                // 3. Khóa tạm thời (chống spam)
+                await _stateManager.ChangeStateAsync(DeviceState.Printing, "Processing print");
 
                 try
                 {
-                    _logger.LogInformation($"Processing print command for ticket: {request.Data.TicketNumber}");
+                    _logger.LogInformation($"Printing ticket: {request.Data.TicketNumber}");
 
-                    // Tạo PrintCommand từ request data
                     var printCommand = new PrintCommand
                     {
                         TicketNumber = request.Data?.TicketNumber,
                         DepartmentName = request.Data?.DepartmentName,
                         CounterNumber = request.Data?.CounterNumber,
-                        FilePath = request.Data?.Path,
+                        FilePath = request.Data?.Path
                     };
 
-                    // Xử lý in phiếu
+                    // 4. In phiếu
                     await _orchestrator.ProcessPrintCommandAsync(printCommand);
 
-                    // Ghi log sự kiện
+                    // 5. Ghi log thành công
                     await _eventLogger.LogEventAsync(new DeviceEvent
                     {
                         Type = EventType.PrintCompleted,
                         TicketNumber = request.Data.TicketNumber,
-                        Description = $"Print completed for ticket {request.Data.TicketNumber}",
+                        Description = $"Printed: {request.Data.TicketNumber}",
                         Metadata = new System.Collections.Generic.Dictionary<string, object>
                         {
-                            { "commandId", request.CommandId },
-                            { "department", request.Data.DepartmentName }
+                            { "commandId", request.CommandId }
                         }
                     });
 
-                    // Báo cáo kết quả về Backend
+                    // 6. Báo Backend thành công
                     await _backendService.SendCommandResultAsync(
                         request.CommandId,
                         true,
                         $"Đã in phiếu {request.Data.TicketNumber}"
                     );
 
-                    // Trả lại Ready
+                    // 7. Mở khóa ngay
                     await _stateManager.ChangeStateAsync(DeviceState.Ready, "Print completed");
 
                     return Ok(new PrintResponse
@@ -116,37 +140,31 @@ namespace KioskDevice.Controllers
                         DeviceId = request.DeviceId,
                         Timestamp = DateTime.UtcNow,
                         Type = "PRINT",
-                        Message = "Đã in",
+                        Message = "Đã in thành công",
                         Status = true,
                         Data = new PrintResponseData { TicketNumber = request.Data.TicketNumber }
                     });
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Print processing error: {ex.Message}");
+                    _logger.LogError($"Print failed: {ex.Message}");
 
-                    // Báo lỗi về Backend
+                    // Báo lỗi
                     await _backendService.ReportErrorAsync(
                         request.CommandId,
                         "PRINTER_ERROR",
-                        $"Print failed: {ex.Message}"
+                        $"In thất bại: {ex.Message}"
                     );
 
-                    // Ghi log sự kiện lỗi
                     await _eventLogger.LogEventAsync(new DeviceEvent
                     {
                         Type = EventType.PrintFailed,
                         TicketNumber = request.Data.TicketNumber,
-                        Description = $"Print failed: {ex.Message}",
-                        Metadata = new System.Collections.Generic.Dictionary<string, object>
-                        {
-                            { "commandId", request.CommandId },
-                            { "error", ex.Message }
-                        }
+                        Description = $"Print failed: {ex.Message}"
                     });
 
-                    // Set state Error
-                    await _stateManager.ChangeStateAsync(DeviceState.Error, ex.Message);
+                    // Mở khóa ngay (cho phép thử lại)
+                    await _stateManager.ChangeStateAsync(DeviceState.Ready, "Print failed, ready for retry");
 
                     return StatusCode(500, new PrintResponse
                     {
@@ -154,14 +172,14 @@ namespace KioskDevice.Controllers
                         DeviceId = request.DeviceId,
                         Timestamp = DateTime.UtcNow,
                         Type = "PRINT",
-                        Message = $"Print failed: {ex.Message}",
+                        Message = $"In thất bại: {ex.Message}",
                         Status = false
                     });
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Unexpected error in PrintTicket: {ex.Message}");
+                _logger.LogError($"Unexpected error: {ex.Message}");
                 return StatusCode(500, new PrintResponse
                 {
                     Status = false,
@@ -172,47 +190,64 @@ namespace KioskDevice.Controllers
             }
         }
 
-        /// <summary>
-        /// Gọi số thứ tự
-        /// POST /api/device/call
-        /// </summary>
+
+        // ============================================
+        // FILE: Controllers/DeviceController.cs (FLEXIBLE - Call)
+        // ============================================
         [HttpPost("call")]
         public async Task<IActionResult> CallTicket([FromBody] ApiResponse<CommandData> request)
         {
             if (request?.Data == null)
-                return BadRequest(new CallResponse
-                {
-                    Status = false,
-                    Message = "Invalid request data",
-                    Type = "CALL"
-                });
+                return BadRequest(new CallResponse { Status = false, Message = "Invalid data", Type = "CALL" });
 
             try
             {
-                // Kiểm tra device sẵn sàng
+                // 1. Kiểm tra SPAM
                 var canProcess = await _stateManager.CanProcessCommandAsync("CALL");
                 if (!canProcess)
                 {
-                    _logger.LogWarning($"Device not ready to call. Current state: {_stateManager.GetCurrentState()}");
-                    return StatusCode(503, new CallResponse
+                    _logger.LogWarning($"Call rejected: Device is busy calling");
+                    return StatusCode(429, new CallResponse
                     {
                         CommandId = request.CommandId,
                         DeviceId = request.DeviceId,
                         Status = false,
-                        Message = "Device not ready for calling",
+                        Message = "Device đang xử lý lệnh gọi khác, vui lòng chờ",
                         Type = "CALL",
                         Timestamp = DateTime.UtcNow
                     });
                 }
 
-                // Khóa device - từ chối lệnh mới
-                await _stateManager.ChangeStateAsync(DeviceState.Calling, "Processing call command");
+                // 2. Kiểm tra hệ thống gọi SẴN SÀNG chưa
+                var callSystemStatus = await _callSystemService.GetCallSystemStatusAsync();
+                if (callSystemStatus != 1)
+                {
+                    _logger.LogWarning($"Call system not ready: status={callSystemStatus}");
+                    
+                    await _backendService.ReportErrorAsync(
+                        request.CommandId,
+                        "CALL_SYSTEM_ERROR",
+                        $"Hệ thống gọi không sẵn sàng"
+                    );
+
+                    return StatusCode(503, new CallResponse
+                    {
+                        CommandId = request.CommandId,
+                        DeviceId = request.DeviceId,
+                        Status = false,
+                        Message = "Hệ thống gọi không sẵn sàng",
+                        Type = "CALL",
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
+
+                // 3. Khóa tạm thời
+                await _stateManager.ChangeStateAsync(DeviceState.Calling, "Processing call");
 
                 try
                 {
-                    _logger.LogInformation($"Processing call command for ticket: {request.Data.TicketNumber}");
+                    _logger.LogInformation($"Calling ticket: {request.Data.TicketNumber}");
 
-                    // Tạo CallCommand từ request data
                     var callCommand = new CallCommand
                     {
                         TicketNumber = request.Data.TicketNumber,
@@ -222,30 +257,25 @@ namespace KioskDevice.Controllers
                         AudioPath = request.Data.Path
                     };
 
-                    // Xử lý gọi số
+                    // 4. Gọi số
                     await _orchestrator.ProcessCallCommandAsync(callCommand);
 
-                    // Ghi log sự kiện
+                    // 5. Ghi log
                     await _eventLogger.LogEventAsync(new DeviceEvent
                     {
                         Type = EventType.CallCompleted,
                         TicketNumber = request.Data.TicketNumber,
-                        Description = $"Called ticket {request.Data.TicketNumber} to counter {request.Data.CounterNumber}",
-                        Metadata = new System.Collections.Generic.Dictionary<string, object>
-                        {
-                            { "commandId", request.CommandId },
-                            { "counter", request.Data.CounterNumber }
-                        }
+                        Description = $"Called: {request.Data.TicketNumber} to counter {request.Data.CounterNumber}"
                     });
 
-                    // Báo cáo kết quả về Backend
+                    // 6. Báo Backend
                     await _backendService.SendCommandResultAsync(
                         request.CommandId,
                         true,
-                        $"Called ticket {request.Data.TicketNumber} department {request.Data.CounterNumber}"
+                        $"Đã gọi phiếu {request.Data.TicketNumber}"
                     );
 
-                    // Trả lại Ready
+                    // 7. Mở khóa
                     await _stateManager.ChangeStateAsync(DeviceState.Ready, "Call completed");
 
                     return Ok(new CallResponse
@@ -254,37 +284,30 @@ namespace KioskDevice.Controllers
                         DeviceId = request.DeviceId,
                         Timestamp = DateTime.UtcNow,
                         Type = "CALL",
-                        Message = "Đã call",
+                        Message = "Đã gọi thành công",
                         Status = true,
                         Data = new CallResponseData { TicketNumber = request.Data.TicketNumber }
                     });
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Call processing error: {ex.Message}");
+                    _logger.LogError($"Call failed: {ex.Message}");
 
-                    // Báo lỗi về Backend
                     await _backendService.ReportErrorAsync(
                         request.CommandId,
                         "CALL_SYSTEM_ERROR",
-                        $"Call failed: {ex.Message}"
+                        $"Gọi thất bại: {ex.Message}"
                     );
 
-                    // Ghi log sự kiện lỗi
                     await _eventLogger.LogEventAsync(new DeviceEvent
                     {
                         Type = EventType.CallMissed,
                         TicketNumber = request.Data.TicketNumber,
-                        Description = $"Call failed: {ex.Message}",
-                        Metadata = new System.Collections.Generic.Dictionary<string, object>
-                        {
-                            { "commandId", request.CommandId },
-                            { "error", ex.Message }
-                        }
+                        Description = $"Call failed: {ex.Message}"
                     });
 
-                    // Set state Error
-                    await _stateManager.ChangeStateAsync(DeviceState.Error, ex.Message);
+                    // Mở khóa ngay
+                    await _stateManager.ChangeStateAsync(DeviceState.Ready, "Call failed, ready for retry");
 
                     return StatusCode(500, new CallResponse
                     {
@@ -292,14 +315,14 @@ namespace KioskDevice.Controllers
                         DeviceId = request.DeviceId,
                         Timestamp = DateTime.UtcNow,
                         Type = "CALL",
-                        Message = $"Call failed: {ex.Message}",
+                        Message = $"Gọi thất bại: {ex.Message}",
                         Status = false
                     });
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Unexpected error in CallTicket: {ex.Message}");
+                _logger.LogError($"Unexpected error: {ex.Message}");
                 return StatusCode(500, new CallResponse
                 {
                     Status = false,

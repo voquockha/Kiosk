@@ -25,14 +25,12 @@ namespace KioskDevice.Services.Advanced
         {
             try
             {
-                _logger.LogInformation("=== Bắt đầu khởi tạo Display ===");
-
                 // Đọc danh sách counter từ cấu hình
                 var section = _config.GetSection("Devices:DisplayMappings");
                 foreach (var child in section.GetChildren())
                 {
                     var counterNumber = child.Key;
-                    _logger.LogInformation($"Khởi tạo LED cho quầy {counterNumber}...");
+                    _logger.LogInformation($"LED init {counterNumber}...");
 
                     // Gửi chuỗi lệnh cấu hình LED
 
@@ -43,21 +41,23 @@ namespace KioskDevice.Services.Advanced
                     await _displayService.SendToDisplayAsync($"*[Matrix][SetAlign][H2]Center[!]", counterNumber);
                     await Task.Delay(200);
                     await _displayService.SendToDisplayAsync($"*[H1]QUAY {counterNumber}[!]", counterNumber);
+                    await Task.Delay(200);
+                    await _displayService.SendToDisplayAsync($"*[H2][!]", counterNumber);
 
                     _logger.LogInformation($"LED QUAY {counterNumber} READY");
                 }
 
-                _logger.LogInformation("=== Hoàn tất khởi tạo Display ===");
+                _logger.LogInformation("=== Init Display success ===");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Lỗi khi khởi tạo Display: {ex.Message}");
+                _logger.LogError($"Init Display error: {ex.Message}");
             }
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("DisplayInitializer dừng lại.");
+            _logger.LogInformation("DisplayInitializer stop");
             return Task.CompletedTask;
         }
     }

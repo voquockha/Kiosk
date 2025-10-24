@@ -19,6 +19,8 @@ namespace KioskDevice.Services
         private readonly IDeviceStateManager _stateManager;
         private readonly IEventLogger _eventLogger;
         private readonly IConfiguration _config;
+        private readonly IPrinterService _printerService;
+        private readonly ICallSystemService _callSystemService;
 
         public CommandPollingService(
             ILogger<CommandPollingService> logger,
@@ -26,7 +28,9 @@ namespace KioskDevice.Services
             IDeviceOrchestrator orchestrator,
             IDeviceStateManager stateManager,
             IEventLogger eventLogger,
-            IConfiguration config)
+            IConfiguration config,
+            IPrinterService printerService,
+            ICallSystemService callSystemService)
         {
             _logger = logger;
             _backendService = backendService;
@@ -79,7 +83,20 @@ namespace KioskDevice.Services
                                     );
                                     continue;
                                 }
-
+                                // 2. Kiểm tra máy in SẴN SÀNG chưa (kiểm tra thực tế)
+                                var printerReady = await _printerService.IsPrinterReadyAsync();
+                                if (!printerReady)
+                                {
+                                    var printerStatus = await _printerService.GetPrinterStatusAsync();
+                                    _logger.LogWarning($"Printer not ready: {printerStatus}");
+                                    
+                                    // Báo lỗi về Backend nhưng KHÔNG khóa state
+                                    await _backendService.ReportErrorAsync(
+                                        commandResponse.CommandId,
+                                        "PRINTER_ERROR",
+                                        $"Máy in không sẵn sàng: {printerStatus}"
+                                    );
+                                }
                                 // Khóa device
                                 await _stateManager.ChangeStateAsync(DeviceState.Printing, "Processing PRINT from polling");
 
@@ -111,13 +128,24 @@ namespace KioskDevice.Services
                                 }
                                 catch (Exception ex)
                                 {
-                                    _logger.LogError($"PRINT command failed: {ex.Message}");
+                                    _logger.LogError($"Print failed: {ex.Message}");
+
+                                    // Báo lỗi
                                     await _backendService.ReportErrorAsync(
                                         commandResponse.CommandId,
                                         "PRINTER_ERROR",
-                                        $"Print failed: {ex.Message}"
+                                        $"In thất bại: {ex.Message}"
                                     );
-                                    await _stateManager.ChangeStateAsync(DeviceState.Error, ex.Message);
+
+                                    await _eventLogger.LogEventAsync(new DeviceEvent
+                                    {
+                                        Type = EventType.PrintFailed,
+                                        TicketNumber = commandResponse.Data.TicketNumber,
+                                        Description = $"Print failed: {ex.Message}"
+                                    });
+
+                                    // Mở khóa ngay (cho phép thử lại)
+                                    await _stateManager.ChangeStateAsync(DeviceState.Ready, "Print failed, ready for retry");
                                 }
                             }
                             // Xử lý lệnh CALL
@@ -131,6 +159,7 @@ namespace KioskDevice.Services
                                     Status = "CALLING",
                                     AudioPath = commandResponse.Data?.Path
                                 };
+
 
                                 // Kiểm tra state
                                 var canProcess = await _stateManager.CanProcessCommandAsync("CALL");
@@ -183,7 +212,7 @@ namespace KioskDevice.Services
                                         "CALL_SYSTEM_ERROR",
                                         $"Call failed: {ex.Message}"
                                     );
-                                    await _stateManager.ChangeStateAsync(DeviceState.Error, ex.Message);
+                                    await _stateManager.ChangeStateAsync(DeviceState.Ready, ex.Message);
                                 }
                             }
                         }

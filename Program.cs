@@ -74,8 +74,7 @@ app.UseCors("AllowAll");
 // ========== MAP CONTROLLERS ==========
 app.MapControllers();
 
-Console.WriteLine("=== KioskDevice đang lắng nghe trên http://localhost:5001 ===");
-Console.WriteLine("=== Swagger UI: http://localhost:5001/swagger ===");
+Console.WriteLine("=== KioskDevice start http://0.0.0.0:5001 ===");
 
 // ========== RUN APP ==========
 await app.RunAsync();
