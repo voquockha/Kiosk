@@ -34,6 +34,7 @@ builder.Services.AddSingleton<IPerformanceMonitor, PerformanceMonitor>();
 builder.Services.AddSingleton<IEventLogger, EventLogger>();
 builder.Services.AddSingleton<IHealthCheckService, HealthCheckService>();
 builder.Services.AddSingleton<IConfigurationReloader, ConfigurationReloader>();
+builder.Services.AddHostedService<DisplayInitializer>();
 
 // Controllers và CORS
 builder.Services.AddControllers();

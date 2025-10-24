@@ -33,8 +33,8 @@ namespace KioskDevice.Tests
             {
                 TicketNumber = "A001",
                 DepartmentName = "Khám Tổng Quát",
-                QueuePosition = 1,
-                CreatedAt = System.DateTime.UtcNow
+                CounterNumber = "1",
+                FilePath = ""
             };
 
             // Act
