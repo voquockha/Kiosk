@@ -34,13 +34,6 @@ namespace KioskDevice.Services.Implementations
             {
                 _logger.LogInformation($"Processing print command for ticket: {command.TicketNumber}");
 
-                // Hiển thị trên màn hình trước
-                await _displayService.DisplayTicketAsync(
-                    command.TicketNumber,
-                    command.DepartmentName,
-                    command.QueuePosition
-                );
-
                 // In phiếu
                 var printResult = await _printerService.PrintTicketAsync(command);
 
@@ -64,13 +57,12 @@ namespace KioskDevice.Services.Implementations
             {
                 _logger.LogInformation($"Processing call command for ticket: {command.TicketNumber}");
 
-                // Gọi số
-                await _callSystemService.CallTicketAsync(command);
-
                 // Hiển thị trên màn hình
                 await _displayService.DisplayMessageAsync(
-                    $"Khám tại quầy {command.CounterNumber}"
+                   command.TicketNumber, command.CounterNumber
                 );
+                // Gọi số
+                await _callSystemService.CallTicketAsync(command); 
 
                 _logger.LogInformation($"Called ticket {command.TicketNumber} to counter {command.CounterNumber}");
             }

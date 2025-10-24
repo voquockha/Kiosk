@@ -17,19 +17,22 @@ namespace KioskDevice.Controllers
         private readonly IEventLogger _eventLogger;
         private readonly IBackendCommunicationService _backendService;
         private readonly ILogger<DeviceController> _logger;
+        private readonly IConfiguration _config;
 
         public DeviceController(
             IDeviceOrchestrator orchestrator,
             IDeviceStateManager stateManager,
             IEventLogger eventLogger,
             IBackendCommunicationService backendService,
-            ILogger<DeviceController> logger)
+            ILogger<DeviceController> logger,
+            IConfiguration config)
         {
             _orchestrator = orchestrator;
             _stateManager = stateManager;
             _eventLogger = eventLogger;
             _backendService = backendService;
             _logger = logger;
+            _config = config;
         }
 
         /// <summary>
@@ -75,11 +78,10 @@ namespace KioskDevice.Controllers
                     // Tạo PrintCommand từ request data
                     var printCommand = new PrintCommand
                     {
-                        TicketNumber = request.Data.TicketNumber,
-                        DepartmentName = request.Data.DepartmentName,
-                        QueuePosition = request.Data.QueuePosition,
-                        CreatedAt = request.Data.CreatedAt,
-                        FilePath = request.Data.Path
+                        TicketNumber = request.Data?.TicketNumber,
+                        DepartmentName = request.Data?.DepartmentName,
+                        CounterNumber = request.Data?.CounterNumber,
+                        FilePath = request.Data?.Path,
                     };
 
                     // Xử lý in phiếu
@@ -188,20 +190,20 @@ namespace KioskDevice.Controllers
             try
             {
                 // Kiểm tra device sẵn sàng
-                // var canProcess = await _stateManager.CanProcessCommandAsync("CALL");
-                // if (!canProcess)
-                // {
-                //     _logger.LogWarning($"Device not ready to call. Current state: {_stateManager.GetCurrentState()}");
-                //     return StatusCode(503, new CallResponse
-                //     {
-                //         CommandId = request.CommandId,
-                //         DeviceId = request.DeviceId,
-                //         Status = false,
-                //         Message = "Device not ready for calling",
-                //         Type = "CALL",
-                //         Timestamp = DateTime.UtcNow
-                //     });
-                // }
+                var canProcess = await _stateManager.CanProcessCommandAsync("CALL");
+                if (!canProcess)
+                {
+                    _logger.LogWarning($"Device not ready to call. Current state: {_stateManager.GetCurrentState()}");
+                    return StatusCode(503, new CallResponse
+                    {
+                        CommandId = request.CommandId,
+                        DeviceId = request.DeviceId,
+                        Status = false,
+                        Message = "Device not ready for calling",
+                        Type = "CALL",
+                        Timestamp = DateTime.UtcNow
+                    });
+                }
 
                 // Khóa device - từ chối lệnh mới
                 await _stateManager.ChangeStateAsync(DeviceState.Calling, "Processing call command");
@@ -240,7 +242,7 @@ namespace KioskDevice.Controllers
                     await _backendService.SendCommandResultAsync(
                         request.CommandId,
                         true,
-                        $"Đã gọi phiếu {request.Data.TicketNumber} quầy {request.Data.CounterNumber}"
+                        $"Called ticket {request.Data.TicketNumber} department {request.Data.CounterNumber}"
                     );
 
                     // Trả lại Ready
@@ -323,7 +325,7 @@ namespace KioskDevice.Controllers
                 var response = new ApiResponse<HeartbeatData>
                 {
                     CommandId = Guid.NewGuid().ToString(),
-                    DeviceId = "KIOSK-001",
+                    DeviceId = _config.GetValue<string>("Device:DeviceId", "KIOSK-001"),
                     Timestamp = DateTime.UtcNow,
                     Type = "HEARTBEAT",
                     Message = "Thông tin heartbeat",
@@ -373,17 +375,17 @@ namespace KioskDevice.Controllers
             {
                 Speaker = new DeviceInfo
                 {
-                    Name = "Default Audio Device",
-                    Id = "speaker-1",
-                    Type = "speaker",
+                    Name = _config.GetValue<string>("Devices:AudioName", "AudioName"),
+                    Id =  _config.GetValue<string>("Devices:AudioID", "AudioID"),
+                    Type = "audio",
                     Status = status.CallSystemStatus == 1 ? "ok" : "error",
                     Volume = 80,
                     IsPlaying = false
                 },
                 Printer = new DeviceInfo
                 {
-                    Name = "HP printer",
-                    Id = "printer-1",
+                    Name = _config.GetValue<string>("Devices:PrinterName", "PrinterName"),
+                    Id = _config.GetValue<string>("Devices:PrinterID", "PrinterID "),
                     Type = "thermal_printer",
                     Status = status.PrinterStatus == "Ready" ? "ok" : "error",
                     Paper = status.PrinterStatus == "Ready" ? "ok" : "error",
