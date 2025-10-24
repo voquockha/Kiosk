@@ -5,6 +5,7 @@ namespace KioskDevice.Services.Advanced
     using System.Collections.Concurrent;
     using Microsoft.Extensions.Logging;
     using System.Threading;
+
     public enum EventType
     {
         PrintStarted,
@@ -41,11 +42,15 @@ namespace KioskDevice.Services.Advanced
     {
         private readonly ConcurrentQueue<DeviceEvent> _events = new();
         private readonly ILogger<EventLogger> _logger;
-        private readonly string _logDirectory = "Logs/Events";
+        private readonly string _logDirectory;
 
         public EventLogger(ILogger<EventLogger> logger)
         {
             _logger = logger;
+
+            _logDirectory = Path.Combine(AppContext.BaseDirectory, "Logs", "Events");
+
+            // Tạo thư mục nếu chưa có
             Directory.CreateDirectory(_logDirectory);
         }
 

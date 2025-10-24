@@ -57,13 +57,12 @@ namespace KioskDevice.Services.Implementations
             {
                 _logger.LogInformation($"Processing call command for ticket: {command.TicketNumber}");
 
-                // Gọi số
-                await _callSystemService.CallTicketAsync(command);
-
                 // Hiển thị trên màn hình
                 await _displayService.DisplayMessageAsync(
                    command.TicketNumber, command.CounterNumber
                 );
+                // Gọi số
+                await _callSystemService.CallTicketAsync(command); 
 
                 _logger.LogInformation($"Called ticket {command.TicketNumber} to counter {command.CounterNumber}");
             }
