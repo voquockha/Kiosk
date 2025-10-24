@@ -36,13 +36,31 @@ namespace KioskDevice.Services.Implementations
                     };
                 }
 
-                // 👉 Thay vì in text, bạn in ảnh
-                // Ví dụ: đường dẫn ảnh hóa đơn
-                string imagePath = command.FilePath ?? @"D:\Khavq\app\PRINT_IN_7-1.jpg";
+                string imagePath = command.FilePath;
+
+                if (string.IsNullOrWhiteSpace(imagePath))
+                {
+                    _logger.LogWarning("Print command received but FilePath is empty or null.");
+                    return new PrinterResponse
+                    {
+                        Success = false,
+                        Message = "Invalid file path (empty or null)"
+                    };
+                }
+
+                if (!File.Exists(imagePath))
+                {
+                    _logger.LogWarning($"Print file not found: {imagePath}");
+                    return new PrinterResponse
+                    {
+                        Success = false,
+                        Message = $"File not found: {imagePath}"
+                    };
+                }
 
                 await PrintImageAsync(imagePath);
 
-                _logger.LogInformation($"Ticket {command.TicketNumber} printed successfully");
+                _logger.LogInformation($"Ticket {command.TicketNumber} printed successfully from file {imagePath}");
 
                 return new PrinterResponse
                 {
@@ -61,6 +79,7 @@ namespace KioskDevice.Services.Implementations
                 };
             }
         }
+
 
         public async Task<bool> IsPrinterReadyAsync()
         {

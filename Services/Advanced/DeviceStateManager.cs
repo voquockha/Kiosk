@@ -1,16 +1,19 @@
+using System;
 using System.Reactive.Subjects;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using System.Reactive.Linq;
+
 namespace KioskDevice.Services.Advanced
 {
     public enum DeviceState
     {
         Initializing,
-        Ready,
-        Printing,
-        Calling,
+        Ready,      // Sẵn sàng
+        Printing,   // Đang in (tránh spam)
+        Calling,     // Đang gọi (tránh spam)
         Error,
-        Maintenance,
-        Offline
+        Maintenance
     }
 
     public interface IDeviceStateManager
@@ -23,7 +26,7 @@ namespace KioskDevice.Services.Advanced
 
     public class DeviceStateManager : IDeviceStateManager
     {
-        private DeviceState _currentState = DeviceState.Initializing;
+        private DeviceState _currentState = DeviceState.Ready;
         private readonly Subject<DeviceState> _stateChanges = new();
         private readonly ILogger<DeviceStateManager> _logger;
 
@@ -40,24 +43,27 @@ namespace KioskDevice.Services.Advanced
         {
             if (_currentState != newState)
             {
-                _logger.LogInformation($"State changed from {_currentState} to {newState}. Reason: {reason}");
+                _logger.LogInformation($"State: {_currentState} → {newState}. Reason: {reason}");
                 _currentState = newState;
                 _stateChanges.OnNext(newState);
-                await Task.CompletedTask;
             }
+            await Task.CompletedTask;
         }
 
         public async Task<bool> CanProcessCommandAsync(string commandType)
         {
+            // Chỉ kiểm tra SPAM - không chặn vì lỗi thiết bị
             return _currentState switch
             {
-                DeviceState.Printing => false,
-                DeviceState.Initializing => true,
-                DeviceState.Ready => true,
-                DeviceState.Offline => false,
-                DeviceState.Error => commandType == "RESET",
-                DeviceState.Maintenance => false,
-                _ => false
+                DeviceState.Ready or DeviceState.Initializing => true, // OK
+                
+                // Đang in → Chỉ chặn PRINT, cho phép CALL
+                DeviceState.Printing => commandType != "PRINT",
+                
+                // Đang gọi → Chỉ chặn CALL, cho phép PRINT
+                DeviceState.Calling => commandType != "CALL",
+                
+                _ => true
             };
         }
     }
