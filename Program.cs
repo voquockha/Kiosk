@@ -54,7 +54,8 @@ var app = builder.Build();
 
 // ========== CONFIGURE URL ==========
 app.Urls.Clear();
-app.Urls.Add("http://0.0.0.0:5001");
+var baseUrl = builder.Configuration["Urls"] ?? "http://localhost:5001";
+app.Urls.Add(baseUrl);
 
 Console.WriteLine("=== Cấu hình Services ===");
 
