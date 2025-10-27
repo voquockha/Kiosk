@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("KioskDevice")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+df4d9a8dd61e2b28ba75d56171253e5a6e452d46")]
 [assembly: System.Reflection.AssemblyProductAttribute("KioskDevice")]
 [assembly: System.Reflection.AssemblyTitleAttribute("KioskDevice")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,0 +1,5 @@
+/home/vqkha/work_spaces/scm/Kiosk/output/kiosk_device/appsettings.Development.json
+/home/vqkha/work_spaces/scm/Kiosk/output/kiosk_device/appsettings.json
+/home/vqkha/work_spaces/scm/Kiosk/output/kiosk_device/KioskDevice.pdb
+/home/vqkha/work_spaces/scm/Kiosk/output/kiosk_device/aspnetcorev2_inprocess.dll
+/home/vqkha/work_spaces/scm/Kiosk/output/kiosk_device/KioskDevice.exe
