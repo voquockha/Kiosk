@@ -33,22 +33,21 @@ namespace KioskDevice.Services.Implementations
             try
             {
                 _logger.LogInformation($"Processing print command for ticket: {command.TicketNumber}");
-                
-                // Hiển thị trên màn hình trước
-                await _displayService.DisplayTicketAsync(command.TicketNumber, command.DepartmentName, command.QueuePosition);
-                
+
                 // In phiếu
                 var printResult = await _printerService.PrintTicketAsync(command);
-                
+
                 if (!printResult.Success)
                 {
-                    await _backendService.ReportErrorAsync($"Print failed for ticket {command.TicketNumber}", "PRINTER_ERROR");
+                    throw new Exception($"Print failed: {printResult.Message}");
                 }
+
+                _logger.LogInformation($"Print completed for ticket {command.TicketNumber}");
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Print command processing error: {ex.Message}");
-                await _backendService.ReportErrorAsync(ex.Message, "PRINT_PROCESS_ERROR");
+                throw;
             }
         }
 
@@ -57,36 +56,45 @@ namespace KioskDevice.Services.Implementations
             try
             {
                 _logger.LogInformation($"Processing call command for ticket: {command.TicketNumber}");
-                
-                // Gọi số
-                await _callSystemService.CallTicketAsync(command);
-                
+
                 // Hiển thị trên màn hình
-                await _displayService.DisplayMessageAsync($"Khám tại quầy {command.CounterNumber}");
-                
+                await _displayService.DisplayMessageAsync(
+                   command.TicketNumber, command.CounterNumber
+                );
+                // Gọi số
+                await _callSystemService.CallTicketAsync(command); 
+
                 _logger.LogInformation($"Called ticket {command.TicketNumber} to counter {command.CounterNumber}");
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Call command processing error: {ex.Message}");
-                await _backendService.ReportErrorAsync(ex.Message, "CALL_PROCESS_ERROR");
+                throw;
             }
         }
 
         public async Task<DeviceStatusDto> GetDeviceStatusAsync()
         {
-            var printerReady = await _printerService.IsPrinterReadyAsync();
-            var callStatus = await _callSystemService.GetCallSystemStatusAsync();
-
-            return new DeviceStatusDto
+            try
             {
-                DeviceId = "KIOSK-001",
-                Status = printerReady ? "ONLINE" : "ERROR",
-                PrinterStatus = await _printerService.GetPrinterStatusAsync(),
-                DisplayStatus = "OK",
-                CallSystemStatus = callStatus,
-                LastHeartbeat = DateTime.UtcNow
-            };
+                var printerReady = await _printerService.IsPrinterReadyAsync();
+                var callStatus = await _callSystemService.GetCallSystemStatusAsync();
+
+                return new DeviceStatusDto
+                {
+                    DeviceId = "KIOSK-001",
+                    Status = printerReady ? "ONLINE" : "ERROR",
+                    PrinterStatus = await _printerService.GetPrinterStatusAsync(),
+                    DisplayStatus = "OK",
+                    CallSystemStatus = callStatus,
+                    LastHeartbeat = DateTime.UtcNow
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Get device status error: {ex.Message}");
+                throw;
+            }
         }
     }
 }

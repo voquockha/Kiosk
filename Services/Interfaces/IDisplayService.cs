@@ -4,8 +4,10 @@ namespace KioskDevice.Services.Interfaces
 {
     public interface IDisplayService
     {
-        Task<bool> DisplayTicketAsync(string ticketNumber, string department, int position);
-        Task<bool> ClearDisplayAsync();
-        Task<bool> DisplayMessageAsync(string message);
+        Task<bool> DisplayMessageAsync(string ticketNumber, string counterNumber);
+
+        Task<bool> SendToDisplayAsync(string message, string counterNumber);
     }
+
+    
 }

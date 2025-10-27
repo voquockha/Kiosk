@@ -34,6 +34,7 @@ builder.Services.AddSingleton<IPerformanceMonitor, PerformanceMonitor>();
 builder.Services.AddSingleton<IEventLogger, EventLogger>();
 builder.Services.AddSingleton<IHealthCheckService, HealthCheckService>();
 builder.Services.AddSingleton<IConfigurationReloader, ConfigurationReloader>();
+builder.Services.AddHostedService<DisplayInitializer>();
 
 // Controllers và CORS
 builder.Services.AddControllers();
@@ -53,7 +54,8 @@ var app = builder.Build();
 
 // ========== CONFIGURE URL ==========
 app.Urls.Clear();
-app.Urls.Add("http://localhost:5001");
+var baseUrl = builder.Configuration["Urls"] ?? "http://localhost:5001";
+app.Urls.Add(baseUrl);
 
 Console.WriteLine("=== Cấu hình Services ===");
 
@@ -73,8 +75,7 @@ app.UseCors("AllowAll");
 // ========== MAP CONTROLLERS ==========
 app.MapControllers();
 
-Console.WriteLine("=== KioskDevice đang lắng nghe trên http://localhost:5001 ===");
-Console.WriteLine("=== Swagger UI: http://localhost:5001/swagger ===");
+Console.WriteLine("=== KioskDevice start http://0.0.0.0:5001 ===");
 
 // ========== RUN APP ==========
 await app.RunAsync();

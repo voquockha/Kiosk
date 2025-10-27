@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Printing;
 using System.Management;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -16,7 +19,7 @@ namespace KioskDevice.Services.Implementations
         public PrinterService(ILogger<PrinterService> logger, IConfiguration config)
         {
             _logger = logger;
-            _printerName = config.GetValue<string>("Devices:PrinterName", "POS Printer");
+            _printerName = config.GetValue<string>("Devices:PrinterName", "EPSON TM-T81III Receipt");
         }
 
         public async Task<PrinterResponse> PrintTicketAsync(PrintCommand command)
@@ -26,21 +29,42 @@ namespace KioskDevice.Services.Implementations
                 var isReady = await IsPrinterReadyAsync();
                 if (!isReady)
                 {
-                    return new PrinterResponse 
-                    { 
-                        Success = false, 
-                        Message = "Printer not ready" 
+                    return new PrinterResponse
+                    {
+                        Success = false,
+                        Message = "Printer not ready"
                     };
                 }
 
-                var ticketContent = GenerateTicketContent(command);
-                await PrintContentAsync(ticketContent);
+                string imagePath = command.FilePath;
 
-                _logger.LogInformation($"Ticket {command.TicketNumber} printed successfully");
-                
-                return new PrinterResponse 
-                { 
-                    Success = true, 
+                if (string.IsNullOrWhiteSpace(imagePath))
+                {
+                    _logger.LogWarning("Print command received but FilePath is empty or null.");
+                    return new PrinterResponse
+                    {
+                        Success = false,
+                        Message = "Invalid file path (empty or null)"
+                    };
+                }
+
+                if (!File.Exists(imagePath))
+                {
+                    _logger.LogWarning($"Print file not found: {imagePath}");
+                    return new PrinterResponse
+                    {
+                        Success = false,
+                        Message = $"File not found: {imagePath}"
+                    };
+                }
+
+                await PrintImageAsync(imagePath);
+
+                _logger.LogInformation($"Ticket {command.TicketNumber} printed successfully from file {imagePath}");
+
+                return new PrinterResponse
+                {
+                    Success = true,
                     Message = "Printed successfully",
                     TicketNumber = command.TicketNumber
                 };
@@ -48,101 +72,127 @@ namespace KioskDevice.Services.Implementations
             catch (Exception ex)
             {
                 _logger.LogError($"Print error: {ex.Message}");
-                return new PrinterResponse 
-                { 
-                    Success = false, 
-                    Message = $"Print failed: {ex.Message}" 
+                return new PrinterResponse
+                {
+                    Success = false,
+                    Message = $"Print failed: {ex.Message}"
                 };
             }
         }
+
 
         public async Task<bool> IsPrinterReadyAsync()
         {
             try
             {
-                // Kiểm tra trạng thái printer qua WMI
-                var query = new ObjectQuery($"SELECT * FROM Win32_Printer WHERE Name='{_printerName}'");
-                var searcher = new ManagementObjectSearcher(query);
-                var collection = searcher.Get();
-
-                if (collection.Count == 0) return false;
-
-                foreach (ManagementObject printer in collection)
+                using var query = new ManagementObjectSearcher("SELECT * FROM Win32_Printer");
+                foreach (ManagementObject printer in query.Get())
                 {
-                    var status = (uint)printer["PrinterStatus"];
-                    return status == 0; // 0 = Ready
+                    var printerName = printer["Name"]?.ToString();
+
+                    if (printerName == _printerName)
+                    {
+                        var statusObj = printer["PrinterStatus"];
+                        if (statusObj == null)
+                        {
+                            _logger.LogWarning("PrinterStatus is null");
+                            return true;
+                        }
+
+                        try
+                        {
+                            var status = Convert.ToUInt32(statusObj);
+                            _logger.LogInformation($"Printer status code: {status}");
+                            return status == 0 || status == 3; // 0=Ready, 3=Idle
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning($"Cannot convert status: {ex.Message}");
+                            return true;
+                        }
+                    }
                 }
+
+                _logger.LogWarning($"Printer not found: {_printerName}");
                 return false;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Printer check error: {ex.Message}");
+                _logger.LogError($"Printer check error: {ex.Message}");
                 return false;
             }
         }
 
         public async Task<string> GetPrinterStatusAsync()
         {
-            var statuses = new System.Collections.Generic.Dictionary<uint, string>
+            var statuses = new Dictionary<uint, string>
             {
                 { 0, "Ready" },
                 { 1, "Paused" },
                 { 2, "Error" },
-                { 3, "PaperOut" },
+                { 3, "Ready" },
                 { 4, "ManualFeed" }
             };
 
             try
             {
-                var query = new ObjectQuery($"SELECT * FROM Win32_Printer WHERE Name='{_printerName}'");
-                var searcher = new ManagementObjectSearcher(query);
-                var collection = searcher.Get();
-
-                foreach (ManagementObject printer in collection)
+                using var query = new ManagementObjectSearcher("SELECT * FROM Win32_Printer");
+                foreach (ManagementObject printer in query.Get())
                 {
-                    var status = (uint)printer["PrinterStatus"];
-                    return statuses.ContainsKey(status) ? statuses[status] : "Unknown";
+                    if (printer["Name"]?.ToString() == _printerName)
+                    {
+                        var statusObj = printer["PrinterStatus"];
+                        if (statusObj != null)
+                        {
+                            try
+                            {
+                                var status = Convert.ToUInt32(statusObj);
+                                return statuses.ContainsKey(status) ? statuses[status] : $"Unknown({status})";
+                            }
+                            catch
+                            {
+                                return "Unknown";
+                            }
+                        }
+                        return "Ready";
+                    }
                 }
             }
-            catch { }
-            
+            catch (Exception ex)
+            {
+                _logger.LogError($"Get printer status error: {ex.Message}");
+            }
+
             return "Disconnected";
         }
 
-        private string GenerateTicketContent(PrintCommand command)
+        private async Task PrintImageAsync(string imagePath)
         {
-            return $@"
-╔══════════════════════════════╗
-║    BỆnh VIỆN TRUNG ƯƠNG      ║
-║    PHIẾU LƯỢT KHÁM BỆNH      ║
-╠══════════════════════════════╣
-║ Số thứ tự: {command.TicketNumber,-18} ║
-║ Khoa: {command.DepartmentName,-23} ║
-║ Vị trí: {command.QueuePosition,-24} ║
-║ Thời gian: {command.CreatedAt:HH:mm:ss,-19} ║
-╠══════════════════════════════╣
-║ Vui lòng chờ đợi lượt của    ║
-║ bạn. Hãy lắng nghe gọi tên   ║
-║ hoặc xem bảng hiển thị       ║
-╚══════════════════════════════╝
-";
-        }
+            using var printDocument = new PrintDocument();
+            printDocument.PrinterSettings.PrinterName = _printerName;
 
-        private async Task PrintContentAsync(string content)
-        {
-            // Sử dụng Windows Print Spooler API
-            using (var printDocument = new System.Drawing.Printing.PrintDocument())
+            printDocument.PrintPage += (sender, e) =>
             {
-                printDocument.PrinterSettings.PrinterName = _printerName;
-                printDocument.PrintPage += (sender, e) =>
+                using (var img = Image.FromFile(imagePath))
                 {
-                    e.Graphics.DrawString(content, new System.Drawing.Font("Courier New", 10), 
-                        System.Drawing.Brushes.Black, 10, 10);
-                    e.HasMorePages = false;
-                };
-                
-                await Task.Run(() => printDocument.Print());
-            }
+                    float targetWidthMm = 40f;
+                    float dpi = e.Graphics.DpiX; // mật độ điểm ảnh thực tế
+                    float targetWidthPx = targetWidthMm / 25.4f * dpi; // đổi mm → px
+
+                    // Tính tỉ lệ scale để giữ nguyên tỷ lệ ảnh
+                    float scale = targetWidthPx / img.Width;
+                    float targetHeightPx = img.Height * scale;
+
+                    // Căn giữa ảnh theo chiều ngang
+                    float startX = (e.PageBounds.Width - targetWidthPx) / 2 - 20;
+                    float startY = 0; // bạn có thể thêm margin nếu muốn
+
+                    e.Graphics.DrawImage(img, startX, startY, targetWidthPx, targetHeightPx);
+                }
+                e.HasMorePages = false;
+            };
+
+            await Task.Run(() => printDocument.Print());
         }
     }
 }
