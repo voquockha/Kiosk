@@ -75,7 +75,7 @@ namespace KioskDevice.Controllers
                     "display" => Ok(new
                     {
                         component = "Display",
-                        status = await _displayService.DisplayMessageAsync("TEST MESSAGE") ? "OK" : "FAILED",
+                        status = await _displayService.DisplayMessageAsync("TEST", "TEST") ? "OK" : "FAILED",
                         message = "Test message sent"
                     }),
 
@@ -107,8 +107,8 @@ namespace KioskDevice.Controllers
                 {
                     TicketNumber = $"TEST-{DateTime.UtcNow:HHmmss}",
                     DepartmentName = "Phòng Khám Test",
-                    QueuePosition = 1,
-                    CreatedAt = DateTime.UtcNow
+                    CounterNumber = "1",
+                    FilePath = ""
                 };
 
                 var result = await _printerService.PrintTicketAsync(testCommand);
