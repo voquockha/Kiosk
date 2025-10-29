@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ========== ĐĂNG KÝ SERVICES ==========
 
-// HttpClient cho Backend
+// (REST) HttpClient cho Backend - không cần khi dùng MQTT, giữ lại nếu dùng song song
 builder.Services.AddHttpClient("BackendApi", client =>
 {
     var baseUrl = builder.Configuration["Backend:BaseUrl"] ?? "http://localhost:5000";
@@ -23,7 +23,8 @@ builder.Services.AddHttpClient("BackendApi", client =>
 builder.Services.AddSingleton<IPrinterService, PrinterService>();
 builder.Services.AddSingleton<IDisplayService, DisplayService>();
 builder.Services.AddSingleton<ICallSystemService, CallSystemService>();
-builder.Services.AddSingleton<IBackendCommunicationService, MockBackendCommunicationService>();
+// Chuyển giao tiếp Backend sang MQTT
+builder.Services.AddSingleton<IBackendCommunicationService, MqttBackendCommunicationService>();
 builder.Services.AddSingleton<IDeviceOrchestrator, DeviceOrchestrator>();
 
 // Advanced Services
@@ -35,6 +36,8 @@ builder.Services.AddSingleton<IEventLogger, EventLogger>();
 builder.Services.AddSingleton<IHealthCheckService, HealthCheckService>();
 builder.Services.AddSingleton<IConfigurationReloader, ConfigurationReloader>();
 builder.Services.AddHostedService<DisplayInitializer>();
+builder.Services.AddHostedService<MqttCommandListener>();
+builder.Services.AddHostedService<HealthCheckBackgroundService>();
 
 // Controllers và CORS
 builder.Services.AddControllers();
